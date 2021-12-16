@@ -131,6 +131,54 @@ const lexer = (rawString) => {
     tagErr.push("start tag is expected");
   }
 
+  const exampleTags = [
+    "head",
+    "body",
+    "input",
+    "html",
+    "meta",
+    "title",
+    "header",
+    "main",
+    "section",
+    "aside",
+    "footer",
+    "nav",
+    "article",
+    "section",
+    "div",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "p",
+    "br",
+    "b",
+    "i",
+    "ol",
+    "ul",
+    "li",
+    "table",
+    "thead",
+    "tbody",
+    "tr",
+    "td",
+    "img",
+    "a",
+    "form",
+    "label",
+    "input",
+  ];
+
+  closeTags.forEach((val) => {
+    const isErr = exampleTags.indexOf(val) < 0 ? true : false;
+    if (isErr) {
+      tagErr.push("tags are not in our limitation.");
+    }
+  });
+
   if (tagErr.length > 0) {
     tagErr = Array.from(new Set(tagErr));
     alert(tagErr.join(" "));
