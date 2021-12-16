@@ -12,20 +12,44 @@
     <title>HTML Parser</title>
   </head>
   <body>
-    <div class="p-4 bg-light text-black text-center">
-      <h1 class="display-3">HTML Parser</h1>
-      <h3>Team Defiler</h3>
+    <div class="row p-4 bg-light">
+      <div class="p-4 bg-light text-black text-center">
+        <h1 class="display-3">HTML Parser</h1>
+        <h3>Team Defiler</h3>
+      </div>
     </div>
     <div class="p-4 bg-secondary text-center">
-      <textarea
-        class="form-control"
-        rows="30"
-        id="parser"
-        name="text"
-      ></textarea>
-      <button onclick="doParse();" type="button" id="parseButton" class="btn btn-dark btn-lg btn-block">
+      <div class="row">
+        <textarea
+          class="form-control"
+          rows="30"
+          id="parser"
+          name="text"
+        ></textarea>
+      </div>
+    </div>
+    <div class="p-4 bg-secondary text-center">
+      <button
+        onclick="doParse();"
+        type="button"
+        id="parseButton"
+        class="btn btn-dark btn-lg btn-block"
+      >
         Parse
       </button>
+    </div>
+    <div class="p-4 bg-white">
+      <table class="table table-hover table-striped" id="table">
+        <thead>
+          <tr>
+            <th scope="col">No.</th>
+            <th scope="col">Stack</th>
+            <th scope="col">Symbols</th>
+            <th scope="col">Input</th>
+            <th scope="col">Action</th>
+          </tr>
+        </thead>
+      </table>
     </div>
     <div class="container-fluid"></div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.2/dist/js/bootstrap.bundle.min.js"></script>

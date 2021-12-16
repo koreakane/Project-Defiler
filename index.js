@@ -5,12 +5,7 @@ const regex = /^>.*/im;
 let isSuccess = false;
 let errorMsg = "";
 
-let storage = {
-  stackStorage: [],
-  symbolStorage: [],
-  inputStorage: [],
-  actionStorage: [],
-};
+let storage = [];
 
 const makeError = (msg) => {
   isSuccess = true;
@@ -42,18 +37,31 @@ const lexer = (rawString) => {
   let input = "";
   let isOpen = false;
   let isTag = false;
+  let isCloseTag = false;
   let skip = false;
   let string = "";
 
+  let tags = [];
+  let closeTags = [];
+  let tagErr = [];
+
   for (let i = 0; i < rawString.length; i++) {
     const char = rawString[i];
-    console.log(char);
+    // console.log(char);
+    // console.log(tags);
+
     switch (char) {
       case '"':
         break;
       case "<":
         if (string.length > 0) {
-          input += "s";
+          if (isOpen && isTag) {
+            input += "t";
+            tags.push(string);
+          } else {
+            input += "s";
+          }
+
           string = "";
         }
         input += "<";
@@ -62,8 +70,26 @@ const lexer = (rawString) => {
         break;
       case ">":
         if (string.length > 0) {
-          if (isTag) input += "t";
-          else input += "p";
+          if (isTag) {
+            input += "t";
+            if (isCloseTag) {
+              closeTags.push(string);
+              // tags.push("/" + string);
+              if (tags.length > 0 && tags[tags.length - 1] == string)
+                tags.pop();
+              else if (tags.length < 1) {
+                tagErr.push("end tag is expected");
+              } else if (tags.length > 0 && tags[tags.length - 1] != string) {
+                tagErr.push("start tag and end tag is not same");
+                tags.pop();
+              }
+
+              isCloseTag = false;
+            } else {
+              tags.push(string);
+            }
+          } else input += "p";
+
           string = "";
         }
         isOpen = false;
@@ -74,6 +100,7 @@ const lexer = (rawString) => {
         if (isOpen) {
           input = input.slice(0, -1);
           input += "/";
+          isCloseTag = true;
         }
         break;
       case "\\":
@@ -82,6 +109,7 @@ const lexer = (rawString) => {
       case " ":
         if (isOpen && isTag) {
           input += "t";
+          tags.push(string);
           isTag = false;
           string = "";
         }
@@ -95,7 +123,21 @@ const lexer = (rawString) => {
         break;
     }
   }
-  input += ";";
+
+  console.log(tags);
+  console.log(closeTags);
+
+  if (tags.length > 0) {
+    tagErr.push("start tag is expected");
+  }
+
+  if (tagErr.length > 0) {
+    tagErr = Array.from(new Set(tagErr));
+    alert(tagErr.join(" "));
+    console.log(tagErr);
+  }
+
+  input += "$";
   input = input.split("").join(" ");
   return input;
 };
@@ -108,191 +150,228 @@ const parser = (string) => {
   let symbols = [];
   let remain = input;
 
-  storage = {
-    stackStorage: [stack],
-    symbolStorage: [symbols],
-    inputStorage: [remain],
-    actionStorage: [],
-  };
+  storage.push({
+    stack: stack.join(" "),
+    symbol: symbols.join(" "),
+    input: remain.join(" "),
+    action: " ",
+    error: " ",
+  });
 
   tableSelector([stack, symbols, remain]);
 
   console.log(storage);
+
+  let tableBody = document.getElementById("table");
+
+  let tbody = document.createElement("tbody");
+  tableBody.appendChild(tbody);
+
+  storage.forEach((val, index) => {
+    let newRow = document.createElement("tr");
+    tbody.appendChild(newRow);
+
+    let indexCell = document.createElement("th");
+    indexCell.setAttribute("col", "row");
+    indexCell.textContent = index + 1;
+    newRow.appendChild(indexCell);
+
+    let stackCell = document.createElement("td");
+    stackCell.textContent = val.stack;
+    newRow.appendChild(stackCell);
+
+    let symbolCell = document.createElement("td");
+    symbolCell.textContent = val.symbol;
+    newRow.appendChild(symbolCell);
+
+    let inputCell = document.createElement("td");
+    inputCell.textContent = val.input;
+    newRow.appendChild(inputCell);
+
+    let actionCell = document.createElement("td");
+    actionCell.textContent = val.action;
+    newRow.appendChild(actionCell);
+
+    let errorCell = document.createElement("td");
+    errorCell.textContent = val.error;
+    newRow.appendChild(errorCell);
+  });
 };
 
 const tableSelector = ([stack, symbols, input]) => {
   const data = [stack, symbols, input];
 
-  console.log("---------------------------------------------");
-  console.log(stack);
-  console.log(symbols);
-  console.log(input.join(" "));
+  // console.log("---------------------------------------------");
+  // console.log(stack);
+  // console.log(symbols);
+  // console.log(input.join(" "));
 
   const currentState = stack[stack.length - 1];
   const currentSymbol = symbols[symbols.length - 1];
   const firstText = input[0];
 
   let result = data;
-  let isSuccess = false;
+  let isParseSuccess = false;
+  let isError = false;
 
   const errorMaker = (firstText) => {
-    isSuccess = true;
+    isError = true;
     makeError(firstText);
+    alert(firstText);
   };
-  console.log("currentState, currentSymbol, firstText");
-  console.log(currentState, currentSymbol, firstText);
-  console.log("\n");
+  // console.log("currentState, currentSymbol, firstText");
+  // console.log(currentState, currentSymbol, firstText);
+  // console.log("\n");
 
   switch (currentState) {
     case 0:
       {
         if (firstText === "<") result = shiftFunc(3, data);
-        else errorMaker("gg");
+        else errorMaker(`${currentState}, ${currentSymbol}, ${firstText}`);
       }
       break;
     case 1:
       {
         if (firstText === "$") {
           isSuccess = true;
-        } else errorMaker("gg");
+          isParseSuccess = true;
+        } else errorMaker(`${currentState}, ${currentSymbol}, ${firstText}`);
       }
       break;
     case 2:
       {
-        if (firstText === ";") result = shiftFunc(4, data);
-        else errorMaker("gg");
+        if (firstText === "$") result = reduceFunc(1, data);
+        else errorMaker(`${currentState}, ${currentSymbol}, ${firstText}`);
       }
       break;
     case 3:
       {
-        if (firstText === "t") result = shiftFunc(6, data);
-        else errorMaker("gg");
+        if (firstText === "t") result = shiftFunc(5, data);
+        else errorMaker(`${currentState}, ${currentSymbol}, ${firstText}`);
       }
       break;
     case 4:
       {
-        if (firstText === "$") result = reduceFunc(1, data);
-        else errorMaker("gg");
+        if (firstText === "$") result = reduceFunc(2, data);
+        // else result = errorFunc(2, data);
+        else errorMaker(`${currentState}, ${currentSymbol}, ${firstText}`);
       }
       break;
     case 5:
       {
-        if (firstText === ";") result = reduceFunc(2, data);
-        else errorMaker("gg");
+        if (firstText === ">") result = reduceFunc(10, data);
+        else if (firstText === "p") result = shiftFunc(7, data);
+        else result = errorFunc(1, data);
       }
       break;
     case 6:
       {
-        if (firstText === ">") result = reduceFunc(10, data);
-        else if (firstText === "p") result = shiftFunc(8, data);
-        else errorMaker("gg");
+        if (firstText === ">") result = shiftFunc(9, data);
+        else result = errorFunc(1, data);
       }
       break;
     case 7:
       {
-        if (firstText === ">") result = shiftFunc(10, data);
-        else errorMaker("gg");
+        if (firstText === ">") result = reduceFunc(9, data);
+        else result = errorFunc(1, data);
       }
       break;
     case 8:
       {
-        if (firstText === ">") result = reduceFunc(9, data);
-        else errorMaker("gg");
+        if (firstText === "$") result = reduceFunc(3, data);
+        else if (firstText === "<") result = reduceFunc(3, data);
+        else if (firstText === "/") result = reduceFunc(3, data);
+        else if (firstText === "s") result = reduceFunc(3, data);
+        else errorMaker(`${currentState}, ${currentSymbol}, ${firstText}`);
       }
       break;
     case 9:
       {
-        if (firstText === ";") result = reduceFunc(3, data);
-        else if (firstText === "<") result = reduceFunc(3, data);
-        else if (firstText === "/") result = reduceFunc(3, data);
-        else if (firstText === "s") result = reduceFunc(3, data);
-        else errorMaker("gg");
+        if (firstText === "<") result = shiftFunc(11, data);
+        else if (firstText === "/") result = reduceFunc(7, data);
+        else if (firstText === "s") result = shiftFunc(13, data);
+        else errorMaker(`${currentState}, ${currentSymbol}, ${firstText}`);
       }
       break;
     case 10:
       {
-        if (firstText === "<") result = shiftFunc(12, data);
-        else if (firstText === "/") result = reduceFunc(7, data);
-        else if (firstText === "s") result = shiftFunc(14, data);
-        else errorMaker("gg");
+        if (firstText === "/") result = shiftFunc(14, data);
+        else errorMaker(`${currentState}, ${currentSymbol}, ${firstText}`);
       }
       break;
     case 11:
       {
-        if (firstText === "/") result = shiftFunc(15, data);
-        else errorMaker("gg");
+        if (firstText === "t") result = shiftFunc(5, data);
+        else errorMaker(`${currentState}, ${currentSymbol}, ${firstText}`);
       }
       break;
     case 12:
       {
-        if (firstText === "t") result = shiftFunc(6, data);
-        else errorMaker("gg");
+        if (firstText === "<") result = shiftFunc(11, data);
+        else if (firstText === "/") result = reduceFunc(7, data);
+        else if (firstText === "s") result = shiftFunc(13, data);
+        else errorMaker(`${currentState}, ${currentSymbol}, ${firstText}`);
       }
       break;
     case 13:
       {
-        if (firstText === "<") result = shiftFunc(12, data);
-        else if (firstText === "/") result = reduceFunc(7, data);
-        else if (firstText === "s") result = shiftFunc(14, data);
-        else errorMaker("gg");
+        if (firstText === "<") result = reduceFunc(8, data);
+        else if (firstText === "/") result = reduceFunc(8, data);
+        else if (firstText === "s") result = reduceFunc(8, data);
+        else errorMaker(`${currentState}, ${currentSymbol}, ${firstText}`);
       }
       break;
     case 14:
       {
-        if (firstText === "<") result = reduceFunc(8, data);
-        else if (firstText === "/") result = reduceFunc(8, data);
-        else if (firstText === "s") result = reduceFunc(8, data);
-        else errorMaker("gg");
+        if (firstText === "t") result = shiftFunc(17, data);
+        else errorMaker(`${currentState}, ${currentSymbol}, ${firstText}`);
       }
       break;
     case 15:
       {
-        if (firstText === "t") result = shiftFunc(18, data);
-        else errorMaker("gg");
+        if (firstText === "<") result = shiftFunc(11, data);
+        else if (firstText === "/") result = reduceFunc(7, data);
+        else if (firstText === "s") result = shiftFunc(13, data);
+        // else result = errorFunc(3, data);
+        else errorMaker(`${currentState}, ${currentSymbol}, ${firstText}`);
       }
       break;
     case 16:
       {
-        if (firstText === "<") result = shiftFunc(12, data);
-        else if (firstText === "/") result = reduceFunc(7, data);
-        else if (firstText === "s") result = shiftFunc(14, data);
-        else errorMaker("gg");
+        if (firstText === "/") result = reduceFunc(6, data);
+        else errorMaker(`${currentState}, ${currentSymbol}, ${firstText}`);
       }
       break;
     case 17:
       {
-        if (firstText === "/") result = reduceFunc(6, data);
-        else errorMaker("gg");
+        if (firstText === ">") result = shiftFunc(19, data);
+        else result = errorFunc(1, data);
       }
       break;
     case 18:
       {
-        if (firstText === ">") result = shiftFunc(20, data);
-        else errorMaker("gg");
+        if (firstText === "/") result = reduceFunc(5, data);
+        else errorMaker(`${currentState}, ${currentSymbol}, ${firstText}`);
       }
       break;
     case 19:
       {
-        if (firstText === "/") result = reduceFunc(5, data);
-        else errorMaker("gg");
-      }
-      break;
-    case 20:
-      {
-        if (firstText === ";") result = reduceFunc(4, data);
+        if (firstText === "$") result = reduceFunc(4, data);
         else if (firstText === "<") result = reduceFunc(4, data);
         else if (firstText === "/") result = reduceFunc(4, data);
         else if (firstText === "s") result = reduceFunc(4, data);
-        else errorMaker("gg");
+        else errorMaker(`${currentState}, ${currentSymbol}, ${firstText}`);
       }
       break;
     default:
       break;
   }
 
-  console.log(storage);
+  // console.log(storage);
 
-  if (isSuccess) {
+  if (isError) {
+    alert("error!");
+  } else if (isParseSuccess) {
     alert("success!");
     console.log(result);
   } else tableSelector(data);
@@ -303,13 +382,13 @@ const shiftFunc = (shiftNum, [stack, symbols, input]) => {
   symbols.push(input[0]);
   input.shift();
 
-  storage = {
-    ...storage,
-    stackStorage: [...storage.stackStorage, stack],
-    symbolStorage: [...storage.symbolStorage, symbols],
-    inputStorage: [...storage.inputStorage, input],
-    actionStorage: [...storage.actionStorage, `shift ${shiftNum}`],
-  };
+  storage.push({
+    stack: stack.join(", "),
+    symbol: symbols.join(", "),
+    input: input.join(", "),
+    action: `shift ${shiftNum}`,
+    error: " ",
+  });
 
   return [stack, symbols, input];
 };
@@ -317,7 +396,7 @@ const shiftFunc = (shiftNum, [stack, symbols, input]) => {
 const reduceData = (reduceNum) => {
   switch (reduceNum) {
     case 1:
-      return [2, "S", "S -> A ;"];
+      return [1, "S", "S -> A"];
     case 2:
       return [2, "A", "A -> < B"];
     case 3:
@@ -337,7 +416,7 @@ const reduceData = (reduceNum) => {
     case 10:
       return [0, "P", "P -> ε"];
     default:
-      return [2, "S", "S -> A;"];
+      return [1, "S", "S -> A"];
   }
 };
 
@@ -348,12 +427,13 @@ const reduceFunc = (reduceNum, [stack, symbols, input]) => {
   symbols.splice(-n, n);
   symbols.push(symbol);
 
-  storage = {
-    ...storage,
-    stackStorage: [...storage.stackStorage, stack],
-    symbolStorage: [...storage.symbolStorage, symbols],
-    actionStorage: [...storage.actionStorage, `reduce (${reduceNum}) ${rule}`],
-  };
+  storage.push({
+    stack: stack.join(", "),
+    symbol: symbols.join(", "),
+    input: input.join(", "),
+    action: `reduce (${reduceNum}) ${rule}`,
+    error: " ",
+  });
 
   const currentState = stack[stack.length - 1];
   const data = [stack, symbols, input];
@@ -366,24 +446,24 @@ const reduceFunc = (reduceNum, [stack, symbols, input]) => {
       if (currentState === 0) return gotoFunc(2, data);
       else return data;
     case "B":
-      if (currentState === 3) return gotoFunc(5, data);
-      else if (currentState === 12) return gotoFunc(16, data);
+      if (currentState === 3) return gotoFunc(4, data);
+      else if (currentState === 11) return gotoFunc(15, data);
       else return data;
     case "C":
-      if (currentState === 7) return gotoFunc(9, data);
+      if (currentState === 6) return gotoFunc(8, data);
       else return data;
     case "D":
-      if (currentState === 10) return gotoFunc(11, data);
-      else if (currentState === 13) return gotoFunc(17, data);
-      else if (currentState === 16) return gotoFunc(19, data);
+      if (currentState === 9) return gotoFunc(10, data);
+      else if (currentState === 12) return gotoFunc(16, data);
+      else if (currentState === 15) return gotoFunc(18, data);
       else return data;
     case "E":
-      if (currentState === 10) return gotoFunc(13, data);
-      else if (currentState === 13) return gotoFunc(13, data);
-      else if (currentState === 16) return gotoFunc(13, data);
+      if (currentState === 9) return gotoFunc(12, data);
+      else if (currentState === 12) return gotoFunc(12, data);
+      else if (currentState === 15) return gotoFunc(12, data);
       else return data;
     case "P":
-      if (currentState === 6) return gotoFunc(7, data);
+      if (currentState === 5) return gotoFunc(6, data);
       else return data;
     default:
       return data;
@@ -393,12 +473,63 @@ const reduceFunc = (reduceNum, [stack, symbols, input]) => {
 const gotoFunc = (goto, [stack, symbols, input]) => {
   stack.push(goto);
 
-  storage = {
-    ...storage,
-    stackStorage: [...storage.stackStorage, stack],
-    actionStorage: [...storage.actionStorage, `goto ${goto}`],
-  };
+  storage.push({
+    stack: stack.join(", "),
+    symbol: symbols.join(", "),
+    input: input.join(", "),
+    action: `goto ${goto}`,
+    error: " ",
+  });
+
   return [stack, symbols, input];
+};
+
+const errorFunc = (errType, [stack, symbols, input]) => {
+  let newInput = input;
+
+  switch (errType) {
+    case 1:
+      {
+        newInput = input.unshift(">");
+
+        storage.push({
+          stack: stack.join(", "),
+          symbol: symbols.join(", "),
+          input: input.join(", "),
+          action: "error",
+          error: "bracket for tag is expected",
+        });
+      }
+      break;
+    // case 2:
+    //   {
+    //     newInput = input.splice(0, 3);
+    //     storage = {
+    //       stackStorage: [...storage.stackStorage, stack.join(", ")],
+    //       symbolStorage: [...storage.symbolStorage, symbols.join(", ")],
+    //       inputStorage: [...storage.inputStorage, input.join(", ")],
+    //       actionStorage: [...storage.actionStorage, `error`],
+    //       errorStorage: [...storage.errorStorage, "start tag is expected"],
+    //     };
+    //   }
+    //   break;
+    // case 3:
+    //   {
+    //     newInput = ["/", "t", ">", ...input];
+    //     storage = {
+    //       stackStorage: [...storage.stackStorage, stack.join(", ")],
+    //       symbolStorage: [...storage.symbolStorage, symbols.join(", ")],
+    //       inputStorage: [...storage.inputStorage, input.join(", ")],
+    //       actionStorage: [...storage.actionStorage, `error`],
+    //       errorStorage: [...storage.errorStorage, "end tag is expected"],
+    //     };
+    //   }
+    //   break;
+    default:
+      break;
+  }
+
+  return [stack, symbols, newInput];
 };
 
 const saveStorage = (data, type) => {
